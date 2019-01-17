@@ -2,10 +2,26 @@
 
 {% block content %}
 <style>
-
+div.main{
+	margin-left: 200px;
+	margin-top: 22px;
+	width: 67%
+}
+.text{
+	font-size: 16px;
+}
+.labels{
+	font-size: 25px;
+	font-weight: bold;
+}
 </style>
-<p>
-Главная страница
-</p>
+<div class="main labels" style="margin-top: 50px"> Фольклорный архив </div>
+<div class="main text">
+	Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+</div>
+<div class="main labels"> География экспедиций </div>
+<div class="main text" style="margin-bottom: 200px">
+	<script type="text/javascript" charset="utf-8" async src="https://api-maps.yandex.ru/services/constructor/1.0/js/?um=constructor%3Ab226b064b86fe02527d5e5d00321408b7092a4e5acd436b5ee3c353e5ef7f31e&amp;width=852&amp;height=518&amp;lang=ru_RU&amp;scroll=true"></script>
+</div>
 
 {% endblock %}
