@@ -1,10 +1,14 @@
-from flask import Flask
+from flask import Flask, Response
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func, select
 from folklore_app.models import *
 from folklore_app.tables import *
 from flask import render_template, request, redirect, url_for
 from flask_login import login_user, logout_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
+
+MAX_RESULT = 200
 
 def create_app():
     app = Flask(__name__)
@@ -68,21 +72,8 @@ def signup():
 
 @app.route("/database")
 def database():
-    selection = {}
-    selection['question_list'] = [i for i in sorted(set(i.question_list for i in Questions.query.all() if i.question_list is not None))]
-    selection['question_code'] = [i for i in sorted(set(i.question_code for i in Questions.query.all() if i.question_code is not None))]
-    selection['region'] = [i for i in sorted(set(i.region for i in Texts.query.all() if i.region is not None))]
-    selection['district'] = [i for i in sorted(set(i.district for i in Texts.query.all() if i.district is not None))]
-    selection['village'] = [i for i in sorted(set(i.village for i in Texts.query.all() if i.village is not None))]
-    selection['keywords'] = [i for i in sorted(set(i.word for i in Keywords.query.all() if i.word is not None))]
-
-    selection['current_region'] = [i for i in sorted(set(i.current_region for i in Informators.query.all() if i.current_region is not None))]
-    selection['current_district'] = [i for i in sorted(set(i.current_district for i in Informators.query.all() if i.current_district is not None))]
-    selection['current_village'] = [i for i in sorted(set(i.current_village for i in Informators.query.all() if i.current_village is not None))]
-    selection['birth_region'] = [i for i in sorted(set(i.birth_region for i in Informators.query.all() if i.birth_region is not None))]
-    selection['birth_district'] = [i for i in sorted(set(i.birth_district for i in Informators.query.all() if i.birth_district is not None))]
-    selection['birth_village'] = [i for i in sorted(set(i.birth_village for i in Informators.query.all() if i.birth_village is not None))]
-    print (selection)
+    selection = database_fields()
+    
     return render_template('database.html', selection=selection)
 
 @app.route("/text/<idx>")
@@ -90,7 +81,9 @@ def text(idx):
     text = Texts.query.filter_by(id=idx).one_or_none()
     collectors = ', '.join(sorted([collector.code for collector in text.collectors]))
     keywords = ', '.join(sorted([keyword.word for keyword in text.keywords]))
-    return render_template('text.html', textdata=text, collectors=collectors, keywords=keywords)
+    video = text.video.split('\n')
+    print (video)
+    return render_template('text.html', textdata=text, collectors=collectors, keywords=keywords, video=video)
 
 @app.route("/edit/<idx>")
 @login_required
@@ -110,6 +103,7 @@ def edit(idx):
         other=other)
 
 @app.route("/text_edited", methods=['POST','GET'])
+@login_required
 def text_edited():
     if request.form:
         text = Texts.query.get(request.form.get('id', type=int))
@@ -151,6 +145,7 @@ def add():
     return render_template('add_text.html', other=other)
 
 @app.route("/text_added", methods=['POST','GET'])
+@login_required
 def text_added():
     if request.form:
         old_id = request.form.get('old_id', type=str)
@@ -195,6 +190,29 @@ def add_collector():
         return redirect(url_for('collectors'))
     else:
         return render_template('add_collector.html')
+
+@app.route("/edit/collector/<id_collector>", methods=['POST','GET'])
+@login_required
+def edit_collector(id_collector):
+    if request.form:
+        print (request.form)
+        person = Collectors.query.get(request.form.get('id', type=int))
+        person.old_id = request.form.get('old_id', type=str)
+        person.name = request.form.get('name', type=str)
+        person.code = request.form.get('code', type=str)  
+        db.session.flush()
+        db.session.refresh(person)
+        db.session.commit()
+        return redirect(url_for('collectors'))
+    else:
+        person = Collectors.query.get(id_collector)
+        return render_template('edit_collector.html', person=person)
+
+@app.route('/collectors')
+@login_required
+def collectors_view():
+    collectors = Collectors.query.order_by('code').all()
+    return render_template('collectors.html', collectors=collectors)
 
 @app.route("/add/keyword", methods=['POST','GET'])
 @login_required
@@ -250,11 +268,85 @@ def add_informator():
     else:
         return render_template('add_informator.html')
 
+@app.route('/informators')
+@login_required
+def informators_view():
+    informators = Informators.query.order_by('name').all()
+    return render_template('informators.html', informators=informators)
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    return render_template('dashboard.html')
+
 @app.route("/results", methods=['GET'])
 def results():
+    if request.args and 'download' in request.args:
+        return download_file(request)
     if request.args:
-        result = Texts.query.filter()
+        result = get_result(request) 
+        return render_template('results.html', result=result)
+    return render_template('results.html', result=[])
 
+def download_file(request):
+    #response = Response("")
+    #response = HttpResponse(text, content_type='text/txt; charset=utf-8')
+    #response['Content-Disposition'] = 'attachment; filename="result.txt"'
+    if request.args:
+        text = ""
+        result = get_result(request)
+        for item in result[:MAX_RESULT]:
+            text = text + 'ID:\t' + str(item.id) + '\n'
+            text = text + 'Оригинальный ID:\t' + str(item.old_id) + '\n'
+            text = text + 'Год:\t' + str(item.year) + '\n'
+            text = text + 'Регион:\t' + str(item.region) + '\n'
+            text = text + 'Район:\t' + str(item.district) + '\n'
+            text = text + 'Населенный пункт:\t' + str(item.village) + '\n'
+            text = text + 'Жанр:\t' + str(item.genre) + '\n'
+            text = text + 'Информанты:\t' + ';'.join('{}, {}, {}'.format(i.code, i.birth_year, i.gender) for i in item.informators) + '\n'
+            text = text + 'Вопросы:\t' + ';'.join('{}, {}'.format(i.question_list, i.question_code) for i in item.questions) + '\n'
+            text = text + 'Ключевые слова:\t' + str(item.keywords) + '\n'
+            text = text + '='*100 + '\n'
+        response = Response(text, mimetype='text/txt')
+    else:
+        response = Response("", mimetype='text/txt')
+    response.headers['Content-Disposition'] = 'attachment; filename={}.txt'.format(datetime.now())
+    return response
+
+@app.route('/user')
+@login_required
+def user():
+    return render_template('user.html')
+
+@app.route('/help_user')
+@login_required
+def help_user():
+    return render_template('help_user.html')
+
+@app.route('/help')
+def help():
+    return render_template('help.html')
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
+
+@app.route('/stats')
+def stats():
+    result = {}
+    stmt = select([
+        func.count(Texts.id).label('N'),
+        Texts.region,
+        Texts.district,
+        Texts.village
+        ]).group_by("region, district, village").order_by("region, district, village")
+    result['geostats'] = [GeoStats(i) for i in db.session.execute(stmt).fetchall()]
+    print (result)
+    return render_template('stats.html', result=result)
+
+
+def get_result(request):
+        result = Texts.query.filter()
         # year
         if request.args.get('year_from', type=int) is not None:
             result = result.filter(Texts.year >= request.args.get('year_from', type=int))
@@ -296,7 +388,24 @@ def results():
         if request.args.getlist('birth_village', type=str) != []:
             result = result.filter(Texts.informators.any(Informators.birth_village.in_(request.args.getlist('birth_village', type=str))))
 
-    result = [TextForTable(text) for text in result.all()]
-    result = MainSearchTable(result)
-    return render_template('results.html', result=result)
+        result = [TextForTable(text) for text in result.all()]
+        return result
 
+def database_fields():
+    selection = {}
+    none = ('',' ','-',None)
+    selection['question_list'] = [i for i in sorted(set(i.question_list for i in Questions.query.all() if i.question_list not in none))]
+    selection['question_code'] = [i for i in sorted(set(i.question_code for i in Questions.query.all() if i.question_code not in none))]
+    selection['region'] = [i for i in sorted(set(i.region for i in Texts.query.all() if i.region not in none))]
+    selection['district'] = [i for i in sorted(set(i.district for i in Texts.query.all() if i.district not in none))]
+    selection['village'] = [i for i in sorted(set(i.village for i in Texts.query.all() if i.village not in none))]
+    selection['keywords'] = [i for i in sorted(set(i.word for i in Keywords.query.all() if i.word not in none))]
+
+    selection['code'] = [i for i in sorted(set(i.code for i in Informators.query.all() if i.code is not none))]
+    selection['current_region'] = [i for i in sorted(set(i.current_region for i in Informators.query.all() if i.current_region not in none))]
+    selection['current_district'] = [i for i in sorted(set(i.current_district for i in Informators.query.all() if i.current_district not in none))]
+    selection['current_village'] = [i for i in sorted(set(i.current_village for i in Informators.query.all() if i.current_village not in none))]
+    selection['birth_region'] = [i for i in sorted(set(i.birth_region for i in Informators.query.all() if i.birth_region not in none))]
+    selection['birth_district'] = [i for i in sorted(set(i.birth_district for i in Informators.query.all() if i.birth_district not in none))]
+    selection['birth_village'] = [i for i in sorted(set(i.birth_village for i in Informators.query.all() if i.birth_village not in none))]
+    return selection

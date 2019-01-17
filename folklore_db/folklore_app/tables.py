@@ -45,6 +45,7 @@ class TextForTable:
         self.questions = object.questions
         self.genre = object.genre
         self.keywords = ', '.join(sorted([keyword.word for keyword in object.keywords]))
+        self.video = object.video.split('\n')
 
 class InformatorSubTableText:
     code = Col('Код')
@@ -57,3 +58,9 @@ class InformatorSubTableText:
     birth_district = Col('Район рождения')
     birth_village = Col('Место рождения')
 
+class GeoStats:
+    def __init__(self, object):
+        self.count = object[0]
+        self.region = object[1]
+        self.district = object[2]
+        self.village = object[3]        

@@ -54,6 +54,8 @@ class Questions(db.Model):
     question_list = db.Column('question_list', db.Text)
     question_code = db.Column('question_code', db.Text)
     question_text = db.Column('question_text', db.Text(4294967295))
+    question_full = db.Column('question_full', db.Text(4294967295))
+    question_theme = db.Column('question_theme', db.Text)
 
 class Texts(db.Model):
 
