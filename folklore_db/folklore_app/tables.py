@@ -45,7 +45,10 @@ class TextForTable:
         self.questions = object.questions
         self.genre = object.genre
         self.keywords = ', '.join(sorted([keyword.word for keyword in object.keywords]))
-        self.video = object.video.split('\n')
+        if object.video is not None:
+            self.video = object.video.split('\n')
+        else:
+            self.video = []
 
 class InformatorSubTableText:
     code = Col('Код')

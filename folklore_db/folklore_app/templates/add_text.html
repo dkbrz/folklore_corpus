@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-
+{% block title %} Добавить текст {% endblock %}
 {% block content %}
 <style>
 table {border-collapse: collapse; border-radius: 4px;}
@@ -32,7 +32,7 @@ input.delete:hover {background-color: #FF0202;}
 </style>
 
 <p>
-	<form action="/text_added" method="POST">
+	<form action="/text_added" method="POST", enctype="multipart/form-data">
 		<div class="submit col-md-10 left" style="margin-bottom: 10px; padding: 20px;">
     		<input class="save" type="submit" style="float: left;" value="Добавить">
   		</div>
@@ -114,7 +114,7 @@ input.delete:hover {background-color: #FF0202;}
 		Тут будет аудио
 	</div>
 	<div class="text-pics text col-md-8">
-		Тут будет аудио
+		  <input type="file" name="photo" multiple>
 	</div>
 </form>
 </p>

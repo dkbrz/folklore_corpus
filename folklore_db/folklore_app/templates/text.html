@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-
+{% block title %} Текст {% endblock %}
 {% block content %}
 <style>
 .meta-text{
@@ -111,7 +111,9 @@ tr:nth-child(even){background-color: #f2f2f2}
 		Тут будет аудио
 	</div>
 	<div class="text-pics text col-md-8">
-		Тут будет аудио
+		{% for pic in pics %}
+			<img src="/static/imgs/{{pic}}">
+		{% endfor %}
 	</div>
 
 </p>

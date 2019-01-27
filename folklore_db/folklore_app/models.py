@@ -52,7 +52,8 @@ class Questions(db.Model):
     id = db.Column('id', db.Integer, 
                 primary_key=True, autoincrement=True)
     question_list = db.Column('question_list', db.Text)
-    question_code = db.Column('question_code', db.Text)
+    question_num = db.Column('question_num', db.Integer)
+    question_letter = db.Column('question_letter', db.Text(10))
     question_text = db.Column('question_text', db.Text(4294967295))
     question_full = db.Column('question_full', db.Text(4294967295))
     question_theme = db.Column('question_theme', db.Text)

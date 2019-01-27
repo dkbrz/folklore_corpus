@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-
+{% block title %} Панель управления {% endblock %}
 {% block content %}
 <style>
 table{
@@ -49,6 +49,13 @@ th.large-th {
     </td>
     <td>
       <a href='/add/keyword'>Добавить ключевое слово</a>
+    </td>
+  </tr>
+  <tr>
+    <td>
+    </td>
+    <td>
+      <a href='/add/text'>Добавить текст</a>
     </td>
   </tr>
 </table>

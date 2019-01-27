@@ -32,10 +32,18 @@
         </select>
       </div>
 
-      <div class="col-md-2">
-        <label for="question_code">Вопрос</label>
-        <select id="question_code" name="question_code" multiple size=1>
-          {% for i in selection['question_code'] %}
+      <div class="col-md-1">
+        <label for="question_num">Вопрос</label>
+        <select id="question_num" name="question_num" multiple size=1>
+          {% for i in selection['question_num'] %}
+            <option value="{{i}}">{{i}}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-1">
+        <label for="question_letter">Буква</label>
+        <select id="question_letter" name="question_letter" multiple size=1>
+          {% for i in selection['question_letter'] %}
             <option value="{{i}}">{{i}}</option>
           {% endfor %}
         </select>

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-
+{% block title %} Добавить собирателя {% endblock %}
 {% block content %}
 <style>
 table {border-collapse: collapse; border-radius: 4px;}
@@ -32,7 +32,7 @@ input.delete:hover {background-color: #FF0202;}
 </style>
 
 <p>
-	<form action="/text_added" method="POST">
+	<form action="/add/collector" method="POST">
 		<div class="submit col-md-10 left" style="margin-bottom: 10px; padding: 20px;">
     		<input class="save" type="submit" style="float: left;" value="Добавить">
   		</div>

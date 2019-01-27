@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-
+{% block title %} Ключевые слова {% endblock %}
 {% block content %}
 <style>
 table{border-collapse: collapse;
@@ -15,6 +15,16 @@ table.large-table {
   margin-right: 20px;
   margin-left: 20px;
 }
+.button {
+  border: none;
+  color: white;
+  padding: 10px 10px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 2px 2px;
+  cursor: pointer;
+}
 
 th, td {text-align: left;padding: 8px;}
 
@@ -28,12 +38,16 @@ th {background-color: #008000;color: white;}
 		<th>ID</th>
 		<th>Слово</th>
 		<th>Комментарий</th>
+		<th>Редактировать</th>
 	</tr>
 	{% for word in keywords %}
 		<tr>
 			<td> {{word.id}} </td>
 			<td> {{word.word}} </td>
 			<td> {% if word.definition %} {{word.definition}} {% endif %}</td>
+			<td>
+				<a href="/edit/keyword/{{word.id}}" class="button" style="background-color: #008000;">Редактировать</a>
+			</td>
 		</tr>
 	{% endfor %}
 </table>

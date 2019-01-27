@@ -1,19 +1,24 @@
 from flask import Flask, Response
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func, select
+from sqlalchemy import func, select, and_
 from folklore_app.models import *
 from folklore_app.tables import *
 from flask import render_template, request, redirect, url_for
+from flask_uploads import UploadSet, configure_uploads, IMAGES
 from flask_login import login_user, logout_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-
+from folklore_app.settings import CONFIG
+DB = 'mysql+pymysql://{}:{}@{}:{}/{}'.format(CONFIG['USER'],
+                                             CONFIG['PASSWORD'],
+                                             CONFIG['HOST'],
+                                             CONFIG['PORT'],
+                                             CONFIG['DATABASE'])
 MAX_RESULT = 200
-
 def create_app():
-    app = Flask(__name__)
+    app = Flask(__name__, static_url_path='/static', static_folder='static')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:password@localhost:3306/folklore_db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = DB
+    app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
     app.secret_key = 'yyjzqy9ffY'
     db.app = app
     db.init_app(app)
@@ -23,7 +28,9 @@ app = create_app()
 #db.create_all()
 #app.app_context().push()
 login_manager.init_app(app)
-
+photos = UploadSet('photos', IMAGES)
+app.config['UPLOADED_PHOTOS_DEST'] = 'static/imgs'
+configure_uploads(app, photos)
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -38,7 +45,7 @@ def login():
     if request.form:
         username = request.form.get('username')
         password = request.form.get('password')
-        user = User.query.filter_by(username=request.form.get('username')).one_or_none()
+        user = User.query.filter_by(username=username).one_or_none()
         if user:
             if check_password_hash(user.password, password):
                 login_user(user)
@@ -81,9 +88,14 @@ def text(idx):
     text = Texts.query.filter_by(id=idx).one_or_none()
     collectors = ', '.join(sorted([collector.code for collector in text.collectors]))
     keywords = ', '.join(sorted([keyword.word for keyword in text.keywords]))
-    video = text.video.split('\n')
-    print (video)
-    return render_template('text.html', textdata=text, collectors=collectors, keywords=keywords, video=video)
+    if text.video: video = text.video.split('\n')
+    else: video = []
+    if text.images: pics = text.images.split('\n')
+    else: pics = []
+
+    return render_template('text.html',
+                           textdata=text, collectors=collectors, keywords=keywords,
+                           video=video, pics=pics)
 
 @app.route("/edit/<idx>")
 @login_required
@@ -92,7 +104,7 @@ def edit(idx):
     other = {}
     other['collectors'] = [(collector.id, '{} | {}'.format(collector.id,collector.name),) for collector in text.collectors]
     seen_collectors = set(i[0] for i in other['collectors'])
-    other['_collectors'] = [(collector.id, '{} | {}'.format(collector.id, collector.name),) for collector in Collectors.query.order_by('name').all()]
+    other['_collectors'] = [(collector.id, '{} | {}'.format(collector.id, collector.name),) for collector in Collectors.query.order_by('name').all() if collector.id not in seen_collectors]
     other['keywords'] = [(keyword.id, keyword.word,) for keyword in text.keywords]
     other['_keywords'] = [(keyword.id, keyword.word,) for keyword in Keywords.query.order_by('word').all() if keyword.word not in other['keywords']]
     other['informators'] = [(informator.id, '{} | {} | {}'.format(informator.id, informator.name, informator.current_village),) for informator in text.informators]
@@ -147,6 +159,8 @@ def add():
 @app.route("/text_added", methods=['POST','GET'])
 @login_required
 def text_added():
+    print(request.form)
+    print(request.files)
     if request.form:
         old_id = request.form.get('old_id', type=str)
         year = request.form.get('year', type=int)
@@ -156,7 +170,6 @@ def text_added():
         address = request.form.get('address', type=str)
         genre = request.form.get('genre', type=str)
         raw_text = request.form.get('raw_text', type=str)
-        
         informators = Informators.query.filter(Informators.id.in_(request.form.getlist('informators', type=int))).all()
         collectors = Collectors.query.filter(Collectors.id.in_(request.form.getlist('collectors', type=int))).all()
         keywords = Keywords.query.filter(Keywords.id.in_(request.form.getlist('keywords', type=int))).all()
@@ -169,8 +182,18 @@ def text_added():
         db.session.add(text)
         db.session.flush()
         db.session.refresh(text)
+        if 'photo' in request.files:
+            files = []
+            for file in request.files.getlist('photo'):
+                filename = photos.save(file, folder=str(text.id))
+                files.append(filename)
+            none = ('', ' ', '-', None)
+            if text.images not in none:
+                text.images = text.images+'\n'+'\n'.join(files)
+            else:
+                text.images = '\n'.join(files)
         db.session.commit()
-        return redirect(url_for('text', idx = text.id))
+        return redirect(url_for('text', idx=text.id))
     else:
         return redirect(url_for('database'))
 
@@ -185,9 +208,9 @@ def add_collector():
         collector = Collectors(old_id=old_id, name=name, code=code)
         
         db.session.add(collector)
-        db.commit()
+        db.session.commit()
 
-        return redirect(url_for('collectors'))
+        return redirect(url_for('collectors_view'))
     else:
         return render_template('add_collector.html')
 
@@ -195,15 +218,17 @@ def add_collector():
 @login_required
 def edit_collector(id_collector):
     if request.form:
-        print (request.form)
         person = Collectors.query.get(request.form.get('id', type=int))
-        person.old_id = request.form.get('old_id', type=str)
-        person.name = request.form.get('name', type=str)
-        person.code = request.form.get('code', type=str)  
-        db.session.flush()
-        db.session.refresh(person)
+        if request.form.get('submit', type=str) == 'Удалить':
+            db.session.delete(person)
+        else:
+            person.old_id = request.form.get('old_id', type=str)
+            person.name = request.form.get('name', type=str)
+            person.code = request.form.get('code', type=str)
+            db.session.flush()
+            db.session.refresh(person)
         db.session.commit()
-        return redirect(url_for('collectors'))
+        return redirect(url_for('collectors_view'))
     else:
         person = Collectors.query.get(id_collector)
         return render_template('edit_collector.html', person=person)
@@ -226,11 +251,30 @@ def add_keyword():
         keyword = Keywords(old_id=old_id, word=word, definition=definition)
         
         db.session.add(keyword)
-        db.commit()
+        db.session.commit()
         
-        return redirect(url_for('keywords'))
+        return redirect(url_for('keyword_view'))
     else:
         return render_template('add_keyword.html')
+
+@app.route("/edit/keyword/<id_keyword>", methods=['POST','GET'])
+@login_required
+def edit_keyword(id_keyword):
+    if request.form:
+        keyword = Keywords.query.get(request.form.get('id', type=int))
+        if request.form.get('submit', type=str) == 'Удалить':
+            db.session.delete(keyword)
+        else:
+            keyword.old_id = request.form.get('old_id', type=str)
+            keyword.word = request.form.get('word', type=str)
+            keyword.definition = request.form.get('definition', type=str)
+            db.session.flush()
+            db.session.refresh(keyword)
+        db.session.commit()
+        return redirect(url_for('keyword_view'))
+    else:
+        keyword = Keywords.query.get(id_keyword)
+        return render_template('edit_keyword.html', keyword=keyword)
 
 @app.route("/keywords")
 def keyword_view():
@@ -262,7 +306,7 @@ def add_informator():
             )
         
         db.session.add(informator)
-        db.commit()
+        db.session.commit()
         
         return redirect(url_for('informators'))
     else:
@@ -361,15 +405,16 @@ def get_result(request):
         # question list, code
         if request.args.getlist('question_list', type=str) != []:
             result = result.join(TQ, Questions).filter(Questions.question_list.in_(request.args.getlist('question_list', type=str)))
-        if request.args.getlist('question_code', type=str) != []:
-            result = result.join(TQ, Questions).filter(Questions.question_code.in_(request.args.getlist('question_code', type=str)))
+        if request.args.getlist('question_num', type=int) != []:
+            result = result.join(TQ, Questions).filter(Questions.question_num.in_(request.args.getlist('question_num', type=int)))
+        if request.args.getlist('question_letter', type=str) != []:
+            result = result.join(TQ, Questions).filter(Questions.question_letter.in_(request.args.getlist('question_letter', type=str)))
         #text geo
         if request.args.getlist('region', type=str) != []:
             result = result.filter(Texts.region.in_(request.args.getlist('region', type=str)))
         if request.args.getlist('district', type=str) != []:
             result = result.filter(Texts.district.in_(request.args.getlist('district', type=str)))
         if request.args.getlist('village', type=str) != []:
-            print (request.args.getlist('village', type=str))
             result = result.filter(Texts.village.in_(request.args.getlist('village', type=str)))
         #informator meta
         #result = result.join(TI, Informators)
@@ -387,7 +432,17 @@ def get_result(request):
             result = result.filter(Texts.informators.any(Informators.birth_district.in_(request.args.getlist('birth_district', type=str))))
         if request.args.getlist('birth_village', type=str) != []:
             result = result.filter(Texts.informators.any(Informators.birth_village.in_(request.args.getlist('birth_village', type=str))))
+        birth_year_to = request.args.get('birth_year_to', type=int)
+        birth_year_from = request.args.get('birth_year_from', type=int)
+        if birth_year_to and birth_year_from:
+            result = result.filter(Texts.informators.any(and_(Informators.birth_year > birth_year_from, Informators.birth_year < birth_year_to)))
+        elif birth_year_to:
+            result = result.filter(Texts.informators.any(Informators.birth_year < birth_year_to))
+        elif birth_year_from:
+            result = result.filter(Texts.informators.any(Informators.birth_year > birth_year_from))
 
+        # TO-DO keywords
+        
         result = [TextForTable(text) for text in result.all()]
         return result
 
@@ -395,7 +450,8 @@ def database_fields():
     selection = {}
     none = ('',' ','-',None)
     selection['question_list'] = [i for i in sorted(set(i.question_list for i in Questions.query.all() if i.question_list not in none))]
-    selection['question_code'] = [i for i in sorted(set(i.question_code for i in Questions.query.all() if i.question_code not in none))]
+    selection['question_num'] = [i for i in sorted(set(i.question_num for i in Questions.query.all() if i.question_num not in none))]
+    selection['question_letter'] = [i for i in sorted(set(i.question_letter for i in Questions.query.all()))]
     selection['region'] = [i for i in sorted(set(i.region for i in Texts.query.all() if i.region not in none))]
     selection['district'] = [i for i in sorted(set(i.district for i in Texts.query.all() if i.district not in none))]
     selection['village'] = [i for i in sorted(set(i.village for i in Texts.query.all() if i.village not in none))]

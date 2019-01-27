@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% block title %} Редактировать собирателя {% endblock %}
 
 {% block content %}
 <style>
@@ -45,7 +46,13 @@ input.delete:hover {background-color: #FF0202;}
 		</tr>
 		<tr>
 			<td class="text-feature">Прежний ID</td>
-			<td><input type='text' id='old_id' name='old_id' value="{{person.old_id}}"></td>
+			<td>
+				{% if person.old_id %}
+					<input type='text' id='old_id' name='old_id' value="{{person.old_id}}">
+				{% else %}
+					<input type='text' id='old_id' name='old_id' value=''>
+				{% endif %}
+			</td>
 		</tr>
 		<tr>
 			<td class="text-feature">Код</td>
